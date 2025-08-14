@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QRコード表示</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+        #qr-container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            display: inline-block;
+        }
+        #status { margin-top: 20px; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <h1>あなたのQRコード</h1>
+    <div id="qr-container">
+        <img id="qr-img" src="{{ url_for('qr_image', qr_id=qr_id) }}" alt="QR Code">
+    </div>
+    <div id="status">スキャン待機中...</div>
+
+    <script>
+        // ページに埋め込まれた現在のQRコードIDを取得
+        const currentQrId = "{{ qr_id }}";
+
+        // 2秒ごとにQRコードがスキャンされたかサーバーに確認（ポーリング）
+        const intervalId = setInterval(() => {
+            fetch(`/status/${currentQrId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'validated') {
+                        // スキャンされたらメッセージを表示し、3秒後にページをリロードして新しいQRコードを取得
+                        document.getElementById('status').innerText = 'スキャンされました！新しいコードを生成します...';
+                        clearInterval(intervalId); // ポーリングを停止
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 3000);
+                    }
+                });
+        }, 2000);
+    </script>
+</body>
+</html>
