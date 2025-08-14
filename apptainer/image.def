@@ -1,0 +1,17 @@
+Bootstrap: localimage
+From: tensorflow.sif
+
+%environment
+    export LC_ALL=C
+    export LC_CTYPE=C
+
+%files
+    ../setup.sh setup.sh
+    ../requirements.txt requirements.txt
+
+%post
+    apt-get update
+    ./setup.sh
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    rm -rf /usr/local/cuda/compat/lib
