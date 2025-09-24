@@ -8,7 +8,7 @@ if os.path.exists(libdir):
     sys.path.append(libdir)
 
 import logging
-from waveshare_epd import epd2in7
+from waveshare_epd import epd2in7_V2 as epd2in7
 import time
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # --- ★重要★ ---
 # この部分をあなたのRaspberry PiのIPアドレスに変更してください
-SERVER_IP = "192.168.100.20" 
+SERVER_IP = "192.168.100.15" 
 # -----------------
 
 epd = None
@@ -43,7 +43,7 @@ def display_message(epd, font, message):
 try:
     epd = epd2in7.EPD()
     epd.init()
-    epd.Clear(0xFF)
+    epd.Clear()
 
     font_path = os.path.join(picdir, 'Font.ttc')
     if os.path.exists(font_path):
@@ -111,14 +111,14 @@ try:
             logging.info("Timeout. Generating new QR code.")
             # タイムアウトした場合、メッセージは表示せずに次のループへ
         
-        epd.Clear(0xFF) # 次の表示のために画面をクリア
+        epd.Clear() # 次の表示のために画面をクリア
 
 except IOError as e:
     logging.error(e)
 except KeyboardInterrupt:
     logging.info("ctrl + c:")
     if epd is not None:
-        epd.Clear(0xFF)
+        epd.Clear()
         epd.sleep()
     # 存在する可能性のあるフラグファイルを削除
     import glob
