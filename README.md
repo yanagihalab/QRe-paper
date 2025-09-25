@@ -32,3 +32,4 @@ git clone https://github.com/waveshare/e-Paper.git # setup.pyのためだけ
 /e-Paper/RaspberryPi_JetsonNano/python$ pip install .
 
 e-paper 2in7 か 2in7_v2で違う
+# QRe-paper

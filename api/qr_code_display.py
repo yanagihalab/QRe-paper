@@ -81,7 +81,7 @@ try:
         draw.text((10, 63), timestamp, font=font_info, fill=0)
         draw.text((10, 89), f"(QR ID: {qr_id})", font=font_info, fill=0)
         
-        qr_size = 140
+        qr_size = 180
         qr_img_resized = qr_img.resize((qr_size, qr_size))
         qr_x = (epd.width - qr_size) // 2
         qr_y = epd.height - qr_size
