@@ -1,4 +1,4 @@
-#!/usr/bin/python 
+#!/usr/bin/python
 # -*- coding:utf-8 -*-
 import sys
 import os
@@ -8,43 +8,58 @@ if os.path.exists(libdir):
     sys.path.append(libdir)
 
 import logging
-from waveshare_epd import epd2in7_V2 as epd2in7
+# ★ 2.13inch V4 用ライブラリに変更
+from waveshare_epd import epd2in13_V4 as epd2in13
+
 import time
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
 from datetime import datetime
 import uuid
-import json  # ★追加
+import json
+import hashlib
+import csv
 
 logging.basicConfig(level=logging.DEBUG)
 
 # --- ★重要★ ---
-# この部分をあなたのRaspberry PiのIPアドレスに変更してください
-SERVER_IP = "192.168.100.15" 
+# この部分をあなたのRaspberry PiのIPアドレスに変更してください（使っていない場合は無視してOK）
+SERVER_IP = "192.168.100.15"
 # -----------------
+
+csv_filename = "qr_data2.csv"
+file_exists = os.path.exists(csv_filename)
 
 epd = None
 
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
+    """Pillowのバージョン差を吸収してテキストサイズを返す"""
+    try:
+        l, t, r, b = draw.textbbox((0, 0), text, font=font)
+        return (r - l, b - t)
+    except Exception:
+        return draw.textsize(text, font=font)
+
 def display_message(epd, font, message):
-    """画面中央にメッセージを表示する関数"""
+    """画面中央にメッセージを表示する関数（2.13 V4: 250x122）"""
     image = Image.new('1', (epd.width, epd.height), 255)
     draw = ImageDraw.Draw(image)
-    
-    # テキストのサイズを取得して中央揃えにする
-    bbox = draw.textbbox((0,0), message, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    x = (epd.width - text_width) // 2
-    y = (epd.height - text_height) // 2
-    
+    tw, th = _text_size(draw, message, font)
+    x = (epd.width - tw) // 2
+    y = (epd.height - th) // 2
     draw.text((x, y), message, font=font, fill=0)
     epd.display(epd.getbuffer(image))
 
 try:
-    epd = epd2in7.EPD()
+    epd = epd2in13.EPD()
     epd.init()
-    epd.Clear()
+    # 一度全消去
+    try:
+        epd.Clear(0xFF)
+    except TypeError:
+        epd.Clear()
 
+    # フォント準備
     font_path = os.path.join(picdir, 'Font.ttc')
     if os.path.exists(font_path):
         font_info = ImageFont.truetype(font_path, 14)
@@ -55,101 +70,157 @@ try:
         font_main = ImageFont.load_default()
         font_success = ImageFont.load_default()
 
-    user_id = "user-t-8821"
+    node_id = "node-s-8213"
 
     while True:
         # --- 1. 新しいQRコードの準備 ---
+        csv_data = {}
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # 各QRコードをユニークに識別するためのIDを生成
-        qr_id = str(uuid.uuid4().hex)[:8]
-        
-        # ★追加: ページURLを別枠で用意（payload_objとは無関係）
-        page_url = f"https://www.google.com/"
-        logging.info(f"Page URL: {page_url}")
+        qr_id = str(uuid.uuid4().hex)
 
-        # ★変更: 指定のJSON + timestamp をQRの中身にする（URLではなくJSON）
+        # 固有ID
+        source_hash = {'node_id': node_id, 'qr_id': qr_id, 'timestamp': timestamp}
+        source_string = json.dumps(source_hash, sort_keys=True)
+        unique_id = hashlib.sha256(source_string.encode('utf-8')).hexdigest()
+
+        # QR ペイロード（JSON）
         payload_obj = {
-            "name": "Participation Certificate NFT",
-            "description": "Event proof for 2025-10-04 (joint lab meetup).",
-            "image": "https://ipfs.yamada.jo.sus.ac.jp/ipfs/QmTuDCtiZJjRFqiZ6D5X2iNX8ejwNu6Kv1F7EcThej9yHu",
-            "timestamp": timestamp  # 追加済みタイムスタンプ
+            "node_id": node_id,
+            "name": "yama log e-paper",
+            "description": "yama log QRe-paper",
+            "unique_id": unique_id,
+            "qr_id": qr_id
+            # 必要なら "timestamp": timestamp を追加
         }
         qr_payload = json.dumps(payload_obj, ensure_ascii=False, separators=(',', ':'))
         logging.info(f"Generated QR JSON (preview): {qr_payload[:80]}...")
 
-        # ★変更: version=None（自動）でJSONをエンコード
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=4, border=4)
-        qr.add_data(qr_payload)  # ← JSONを追加
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=4,
+            border=4
+        )
+        qr.add_data(qr_payload)
         qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white")
+        qr_img = qr.make_image(fill_color="black", back_color="white").convert("1")
 
-        # ★追加: ページURL用の小さいQRを別途生成（payload_objとは別）
-        page_qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=2, border=2)
-        page_qr.add_data(page_url)
-        page_qr.make(fit=True)
-        page_qr_img = page_qr.make_image(fill_color="black", back_color="white")
+        # CSV 追記
+        csv_data.update(payload_obj)
+        csv_data.update(source_hash)
+        field_names = list(csv_data.keys())
+        write_header_now = (not file_exists) and (not os.path.exists(csv_filename))
+        with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=field_names)
+            if write_header_now:
+                writer.writeheader()
+            writer.writerow(csv_data)
 
         # --- 2. e-paperにQRコードと情報を表示 ---
-        canvas = Image.new('1', (epd.width, epd.height), 255)
+        margin = 4
+        canvas = Image.new('1', (epd.width, epd.height), 255)  # 2.13 V4 は (122, 250)（縦長）
         draw = ImageDraw.Draw(canvas)
-        draw.text((10, 5), "User ID:", font=font_info, fill=0)
-        draw.text((10, 21), user_id, font=font_main, fill=0)
-        draw.text((10, 47), "Timestamp:", font=font_info, fill=0)
-        draw.text((10, 63), timestamp, font=font_info, fill=0)
-        draw.text((10, 89), f"(QR ID: {qr_id})", font=font_info, fill=0)
-        
-        # 大きい（メイン）QR：JSON
-        qr_size = 180
-        qr_img_resized = qr_img.resize((qr_size, qr_size))
-        qr_x = (epd.width - qr_size) // 2
-        qr_y = epd.height - qr_size
+
+        # 上部情報（動的に行間を計算）
+        y = margin
+        draw.text((10, y), "Node ID:", font=font_info, fill=0)
+        _, h_info = _text_size(draw, "Node ID:", font_info)
+        y += h_info + 2
+
+        draw.text((10, y), node_id, font=font_main, fill=0)
+        _, h_main = _text_size(draw, node_id, font_main)
+        y += h_main + 6
+
+        draw.text((10, y), "Timestamp:", font=font_info, fill=0)
+        _, h_info2 = _text_size(draw, "Timestamp:", font=font_info)
+        y += h_info2 + 2
+
+        draw.text((10, y), timestamp, font=font_info, fill=0)
+        _, h_stamp = _text_size(draw, timestamp, font=font_info)
+        y += h_stamp + 2
+
+        draw.text((10, y), f"(QR ID: {qr_id[-8:]})", font=font_info, fill=0)
+        _, h_qrid = _text_size(draw, f"(QR ID: {qr_id[-8:]})", font=font_info)
+        y += h_qrid + 4
+
+        # QR サイズを自動決定（テキスト領域の下、画面下部に収める）
+        max_qr_w = epd.width - 2 * margin
+        max_qr_h = epd.height - y - 2 * margin
+        qr_size = max(40, min(max_qr_w, max_qr_h))  # 最低40px、可能な最大
+
+        # 万一スペースが足りない場合は、上の情報を少し圧縮
+        if qr_size < 40:
+            # 文字を最小限にして再計算
+            canvas = Image.new('1', (epd.width, epd.height), 255)
+            draw = ImageDraw.Draw(canvas)
+            y = margin
+            draw.text((10, y), node_id, font=font_main, fill=0)
+            _, h_main = _text_size(draw, node_id, font=font_main)
+            y += h_main + 4
+            draw.text((10, y), timestamp, font=font_info, fill=0)
+            _, h_stamp = _text_size(draw, timestamp, font=font_info)
+            y += h_stamp + 4
+            max_qr_h = epd.height - y - 2 * margin
+            qr_size = max(32, min(max_qr_w, max_qr_h))
+
+        # QR をリサイズして下部に配置（中央寄せ）
+        qr_img_resized = qr_img.resize((int(qr_size), int(qr_size)), Image.NEAREST).convert("1")
+        qr_x = (epd.width - int(qr_size)) // 2
+        qr_y = epd.height - int(qr_size) - margin
         canvas.paste(qr_img_resized, (qr_x, qr_y))
 
-        # ★追加: 小さい（ページURL）QRを右上に配置（メインQRの後に貼る＝上書きされない）
-        small_size = 76  # だいたい右上に収まるサイズ
-        page_qr_img_resized = page_qr_img.resize((small_size, small_size))
-        page_qr_x = epd.width - small_size - 10
-        page_qr_y = 5
-        canvas.paste(page_qr_img_resized, (page_qr_x, page_qr_y))
-        # （任意）ラベルを付けたい場合は以下を有効化（ASCIIのみ）
-        # draw.text((page_qr_x, page_qr_y + small_size + 2), "Page", font=font_info, fill=0)
-
+        # 表示
         epd.display(epd.getbuffer(canvas))
 
         # --- 3. QRコードがスキャンされるのを待つ ---
         flag_filename = f"scanned_{qr_id}.flag"
         timeout_seconds = 10
         is_scanned = False
-        
+
         logging.info(f"Waiting for scan... (Timeout: {timeout_seconds}s)")
         for _ in range(timeout_seconds):
             if os.path.exists(flag_filename):
                 logging.info("QR Code has been scanned!")
                 is_scanned = True
-                os.remove(flag_filename) # フラグファイルを削除
+                try:
+                    os.remove(flag_filename)  # フラグファイルを削除
+                except Exception:
+                    pass
                 break
             time.sleep(1)
 
         # --- 4. 結果を表示 ---
         if is_scanned:
             display_message(epd, font_success, "読み取り成功！")
-            time.sleep(5) # 成功メッセージを5秒間表示
-        else:
-            logging.info("Timeout. Generating new QR code.")
-            # タイムアウトした場合、メッセージは表示せずに次のループへ
-        
-        epd.Clear() # 次の表示のために画面をクリア
+            time.sleep(5)  # 成功メッセージを5秒表示
+
+        # 次の表示に備えてクリア
+        try:
+            epd.Clear(0xFF)
+        except TypeError:
+            epd.Clear()
 
 except IOError as e:
     logging.error(e)
 except KeyboardInterrupt:
     logging.info("ctrl + c:")
     if epd is not None:
-        epd.Clear()
-        epd.sleep()
+        try:
+            epd.Clear(0xFF)
+        except Exception:
+            pass
+        try:
+            epd.sleep()
+        except Exception:
+            pass
     # 存在する可能性のあるフラグファイルを削除
     import glob
     for f in glob.glob("scanned_*.flag"):
-        os.remove(f)
-    epd2in7.epdconfig.module_exit(cleanup=True)
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+    # ★ 2.13inch V4 の終了処理
+    epd2in13.epdconfig.module_exit(cleanup=True)
     exit()
+

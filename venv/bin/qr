@@ -1,4 +1,4 @@
-#!/home/yama/Desktop/trailregister/venv/bin/python3
+#!/home/yama/tmp/QRe-paper/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
