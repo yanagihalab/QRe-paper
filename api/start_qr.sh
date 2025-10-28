@@ -1,23 +1,23 @@
 #!/bin/bash
 
-VENV_PATH="/home/yama/Desktop/QRe-paper/venv"
-LOG_FILE="/home/yama/qr_log.txt"
+VENV_PATH="/home/key/QRe-paper/venv"
+LOG_FILE="/home/key/qr_log.txt"
 
 echo "--- start.sh exe: $(date) ---" >> $LOG_FILE
 
 sleep 10
 echo "10 seconds waited" >> $LOG_FILE
 
-cd /home/yama/Desktop/QRe-paper/api
+cd /home/key/QRe-paper/api
 echo " change dir $(pwd)" >> $LOG_FILE
 
 #. "${VENV_PATH}/bin/activate"
 #echo "venv activate" >> $LOG_FILE
 
 echo " try qr_code_display.py" >> $LOG_FILE
-#sudo -u yama /usr/bin/python qr_code_display.py >> $LOG_FILE 2>&1 &
+#sudo -u key /usr/bin/python qr_code_display.py >> $LOG_FILE 2>&1 &
 # tyokusetu venv no python wo yobu
-sudo -u yama "${VENV_PATH}/bin/python" qr_code_display.py >> $LOG_FILE 2>&1 &
+sudo -u key "${VENV_PATH}/bin/python" qr_code_e-paper.py >> $LOG_FILE 2>&1 &
 
 echo "--- complete start.sh ---" >> $LOG_FILE
 

@@ -8,7 +8,8 @@ if os.path.exists(libdir):
     sys.path.append(libdir)
 
 import logging
-from waveshare_epd import epd2in7_V2 as epd2in7
+#from waveshare_epd import epd2in7_V2 as epd2in7 # v2
+from waveshare_epd import epd2in7 # v1
 import time
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -22,7 +23,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # --- ★重要★ ---
 # この部分をあなたのRaspberry PiのIPアドレスに変更してください
-SERVER_IP = "192.168.100.15" 
+SERVER_IP = "192.168.100.20" 
 # -----------------
 
 csv_filename = "qr_data2.csv"
@@ -60,7 +61,7 @@ try:
         font_main = ImageFont.load_default()
         font_success = ImageFont.load_default()
 
-    node_id = "node-t-8821"
+    node_id = "node-t-8823"
 
     while True:
         # --- 1. 新しいQRコードの準備 ---
