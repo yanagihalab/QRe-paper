@@ -1,0 +1,14 @@
+{
+  "name": "qre-paper-injective-api",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "send": "node send_set_value.js"
+  },
+  "dependencies": {
+    "@injectivelabs/networks": "^1.16.10",
+    "@injectivelabs/sdk-ts": "^1.16.10",
+    "dotenv": "^16.4.7"
+  }
+}

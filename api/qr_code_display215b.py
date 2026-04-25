@@ -150,18 +150,21 @@ def make_qr_image(qr_payload):
     ).convert("1")
 
 
-def create_display_canvas(epd, qr_img, timestamp, qr_id,
+def create_display_canvas(epd, qr_img, timestamp, qr_id, payload_obj,
                           font_info, font_main, font_small):
     """
     2.15inch b 用レイアウト。
 
-    表示内容：
-      - Node ID
-      - Timestamp
-      - QR ID 下8桁
-      - QR code
+    QRコードには {"payload": {...}} を格納する。
+    Display 側には payload の中身を表示する。
 
-    画面サイズは epd.width / epd.height に従って自動調整する。
+    表示内容：
+      - node_id
+      - name
+      - description
+      - unique_id の短縮表示
+      - qr_id の短縮表示
+      - QR code
     """
     canvas = Image.new("1", (epd.width, epd.height), 255)
     draw = ImageDraw.Draw(canvas)
@@ -172,30 +175,37 @@ def create_display_canvas(epd, qr_img, timestamp, qr_id,
 
     is_landscape = width >= height
 
+    node_id_display = payload_obj.get("node_id", "")
+    name_display = payload_obj.get("name", "")
+    description_display = payload_obj.get("description", "")
+    unique_id_display = payload_obj.get("unique_id", "")
+    qr_id_display = payload_obj.get("qr_id", "")
+
+    short_unique_id = unique_id_display[:10] + "..." if len(unique_id_display) > 10 else unique_id_display
+    short_qr_id = qr_id_display[:10] + "..." if len(qr_id_display) > 10 else qr_id_display
+
     if is_landscape:
-        # 横長の場合：左に情報、右にQR
-        left_w = int(width * 0.46)
+        # 横長の場合：左にJSON内容、右にQR
+        left_w = int(width * 0.52)
         x_text = margin
         y = margin
 
-        draw.text((x_text, y), "Node ID:", font=font_info, fill=0)
-        _, h = _text_size(draw, "Node ID:", font_info)
-        y += h + 1
+        lines = [
+            ("node_id:", node_id_display),
+            ("name:", name_display),
+            ("description:", description_display),
+            ("unique_id:", short_unique_id),
+            ("qr_id:", short_qr_id),
+        ]
 
-        draw.text((x_text, y), node_id, font=font_main, fill=0)
-        _, h = _text_size(draw, node_id, font_main)
-        y += h + 4
+        for label, value in lines:
+            draw.text((x_text, y), label, font=font_small, fill=0)
+            _, h_label = _text_size(draw, label, font_small)
+            y += h_label + 1
 
-        draw.text((x_text, y), "Timestamp:", font=font_info, fill=0)
-        _, h = _text_size(draw, "Timestamp:", font_info)
-        y += h + 1
-
-        draw.text((x_text, y), timestamp, font=font_small, fill=0)
-        _, h = _text_size(draw, timestamp, font_small)
-        y += h + 3
-
-        short_qr_id = qr_id[-8:]
-        draw.text((x_text, y), f"QR:{short_qr_id}", font=font_small, fill=0)
+            draw.text((x_text + 4, y), value, font=font_small, fill=0)
+            _, h_value = _text_size(draw, value, font_small)
+            y += h_value + 3
 
         qr_area_w = width - left_w - margin * 2
         qr_area_h = height - margin * 2
@@ -216,30 +226,26 @@ def create_display_canvas(epd, qr_img, timestamp, qr_id,
         draw.line((line_x, margin, line_x, height - margin), fill=0, width=1)
 
     else:
-        # 縦長の場合：上に情報、下にQR
+        # 縦長の場合：上にJSON内容、下にQR
         x = margin
         y = margin
 
-        draw.text((x, y), "Node ID:", font=font_info, fill=0)
-        _, h = _text_size(draw, "Node ID:", font_info)
-        y += h + 1
+        lines = [
+            ("node_id:", node_id_display),
+            ("name:", name_display),
+            ("description:", description_display),
+            ("unique_id:", short_unique_id),
+            ("qr_id:", short_qr_id),
+        ]
 
-        draw.text((x, y), node_id, font=font_main, fill=0)
-        _, h = _text_size(draw, node_id, font_main)
-        y += h + 4
+        for label, value in lines:
+            draw.text((x, y), label, font=font_small, fill=0)
+            _, h_label = _text_size(draw, label, font_small)
+            y += h_label + 1
 
-        draw.text((x, y), "Timestamp:", font=font_info, fill=0)
-        _, h = _text_size(draw, "Timestamp:", font_info)
-        y += h + 1
-
-        draw.text((x, y), timestamp, font=font_small, fill=0)
-        _, h = _text_size(draw, timestamp, font_small)
-        y += h + 3
-
-        short_qr_id = qr_id[-8:]
-        draw.text((x, y), f"QR:{short_qr_id}", font=font_small, fill=0)
-        _, h = _text_size(draw, f"QR:{short_qr_id}", font_small)
-        y += h + 3
+            draw.text((x + 4, y), value, font=font_small, fill=0)
+            _, h_value = _text_size(draw, value, font_small)
+            y += h_value + 2
 
         qr_area_w = width - margin * 2
         qr_area_h = height - y - margin
@@ -297,8 +303,12 @@ try:
             "qr_id": qr_id,
         }
 
+        qr_payload_obj = {
+            "payload": payload_obj
+        }
+
         qr_payload = json.dumps(
-            payload_obj,
+            qr_payload_obj,
             ensure_ascii=False,
             separators=(",", ":"),
         )
@@ -314,6 +324,7 @@ try:
             qr_img=qr_img,
             timestamp=timestamp,
             qr_id=qr_id,
+            payload_obj=payload_obj,
             font_info=font_info,
             font_main=font_main,
             font_small=font_small,
@@ -322,7 +333,7 @@ try:
         _display_epd(epd, canvas)
 
         flag_filename = f"scanned_{qr_id}.flag"
-        timeout_seconds = 10
+        timeout_seconds = 180
         is_scanned = False
 
         logging.info(f"Waiting for scan... Timeout: {timeout_seconds}s")

@@ -83,7 +83,7 @@ Waveshare e-Paper / QR表示で最低限必要な Python パッケージ例：
 
 python -m pip install gpiozero lgpio spidev qrcode pillow
 7. Waveshare e-Paper ドライバのインストール
-cd ~/Desktop/QRe-paper/e-Paper/RaspberryPi_JetsonNano/python
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python
 python setup.py install
 
 または、venv の Python を直接指定します。
@@ -116,7 +116,7 @@ PY
 
 2.15inch b：
 
-cd ~/Desktop/QRe-paper/e-Paper/RaspberryPi_JetsonNano/python/examples
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python/examples
 
 GPIOZERO_PIN_FACTORY=lgpio \
 ~/Desktop/QRe-paper/venv/bin/python epd_2in15b_test.py
@@ -128,7 +128,7 @@ sudo env GPIOZERO_PIN_FACTORY=lgpio \
 
 3.7inch：
 
-cd ~/Desktop/QRe-paper/e-Paper/RaspberryPi_JetsonNano/python/examples
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python/examples
 
 sudo env GPIOZERO_PIN_FACTORY=lgpio \
 ~/Desktop/QRe-paper/venv/bin/python epd_3in7_test.py
@@ -197,7 +197,7 @@ SPI / GPIO 権限問題
 
 まず公式サンプルで確認します。
 
-cd ~/Desktop/QRe-paper/e-Paper/RaspberryPi_JetsonNano/python/examples
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python/examples
 
 sudo env GPIOZERO_PIN_FACTORY=lgpio \
 ~/Desktop/QRe-paper/venv/bin/python epd_2in15b_test.py
@@ -212,4 +212,103 @@ sudo env GPIOZERO_PIN_FACTORY=lgpio \
 cd ~/Desktop/QRe-paper
 source venv/bin/activate
 python script.py
+
+
+---
+
+## Waveshare e-Paper ドライバの取得
+
+QRe-paper では Waveshare 公式の Python ドライバを使用します。  
+`git clone` 後、以下のように公式リポジトリを取得してください。
+
+```bash
+cd ~/Desktop/QRe-paper
+git clone https://github.com/waveshareteam/e-Paper.git waveshare-e-Paper-latest
+
+取得後、Python 用サンプルとドライバは以下にあります。
+
+~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python
+
+ディレクトリ確認：
+
+ls ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python
+
+期待される主な構成：
+
+examples/
+lib/
+pic/
+setup.py
+Waveshare e-Paper Python ドライバのインストール
+
+仮想環境を作成して有効化します。
+
+cd ~/Desktop/QRe-paper
+
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+
+必要な Python パッケージを入れます。
+
+python -m pip install gpiozero lgpio spidev qrcode pillow
+
+Waveshare ドライバをインストールします。
+
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python
+python setup.py install
+2.15inch b ドライバ確認
+~/Desktop/QRe-paper/venv/bin/python - <<'PY'
+from waveshare_epd import epd2in15b
+
+print("epd2in15b OK")
+epd = epd2in15b.EPD()
+print("width =", epd.width)
+print("height =", epd.height)
+PY
+
+期待される例：
+
+epd2in15b OK
+width = 160
+height = 296
+2.15inch b 公式サンプル実行
+cd ~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python/examples
+
+GPIOZERO_PIN_FACTORY=lgpio \
+~/Desktop/QRe-paper/venv/bin/python epd_2in15b_test.py
+
+正常な場合は、以下のように busy release が表示されます。
+
+DEBUG:waveshare_epd.epd2in15b:e-Paper busy
+DEBUG:waveshare_epd.epd2in15b:e-Paper busy release
+
+
+---
+
+## yamalog-epaper 統合版の実行スクリプト
+
+TX送信後に txhash を取得し、その後 QRコードを生成して 2.15inch b e-Paper に表示する統合版スクリプトは以下です。
+
+```bash
+~/Desktop/QRe-paper/api/qr_tx_display215b_yamalog_epaper.py
+
+1回だけ実行する例：
+
+cd ~/Desktop/QRe-paper/api
+
+EPAPER_BASE_DIR=~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python \
+N_TRIALS=1 \
+DISPLAY_HOLD_SEC=180 \
+GPIOZERO_PIN_FACTORY=lgpio \
+~/Desktop/QRe-paper/venv/bin/python qr_tx_display215b_yamalog_epaper.py
+
+通常実行：
+
+cd ~/Desktop/QRe-paper/api
+
+EPAPER_BASE_DIR=~/Desktop/QRe-paper/waveshare-e-Paper-latest/RaspberryPi_JetsonNano/python \
+DISPLAY_HOLD_SEC=180 \
+GPIOZERO_PIN_FACTORY=lgpio \
+~/Desktop/QRe-paper/venv/bin/python qr_tx_display215b_yamalog_epaper.py
 

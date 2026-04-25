@@ -59,7 +59,8 @@ sudo apt install -y \
   libfreetype6-dev \
   libopenjp2-7 \
   libopenjp2-7-dev \
-  libatlas-base-dev
+  libopenblas0 \
+  libopenblas-dev
 
 echo
 echo "[6/8] Install GPIO / SPI / I2C utilities"
