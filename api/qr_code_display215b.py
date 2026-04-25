@@ -18,24 +18,18 @@ import glob
 # Path settings
 # ============================================================
 
-picdir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
-    'pic'
-)
-
-libdir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
-    'lib'
-)
+BASE_DIR = "/home/yamalog-8/Desktop/QRe-paper/e-Paper/RaspberryPi_JetsonNano/python"
+picdir = os.path.join(BASE_DIR, "pic")
+libdir = os.path.join(BASE_DIR, "lib")
 
 if os.path.exists(libdir):
     sys.path.append(libdir)
 
 # ============================================================
-# Waveshare 3.7 inch e-Paper driver
+# Waveshare 2.15 inch b e-Paper driver
 # ============================================================
 
-from waveshare_epd import epd3in7
+from waveshare_epd import epd2in15b
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -45,10 +39,9 @@ logging.basicConfig(level=logging.DEBUG)
 
 SERVER_IP = "192.168.100.15"
 
-csv_filename = "qr_data2.csv"
+csv_filename = "qr_data215b.csv"
 
-# 3.7inch 用ノードID
-node_id = "node-s-8370"
+node_id = "node-s-8215b"
 
 epd = None
 
@@ -76,33 +69,23 @@ def _clear_epd(epd):
 
 def _display_epd(epd, image):
     """
-    3.7inchドライバの表示メソッド差を吸収する。
+    2.15inch b 用の表示処理。
 
-    一般的なWaveshareドライバでは epd.display(epd.getbuffer(image)) を使う。
-    一部の3.7inchドライバでは display_1Gray / display_4Gray が用意されているため、
-    利用可能なメソッドを順に試す。
+    epd2in15b は black / red の2バッファを要求する。
+    今回は黒表示のみ使うため、red 側は白紙画像を渡す。
     """
-    image = image.convert("1")
+    image_black = image.convert("1")
+    image_red = Image.new("1", (epd.width, epd.height), 255)
 
-    if hasattr(epd, "display"):
-        epd.display(epd.getbuffer(image))
-        return
-
-    if hasattr(epd, "display_1Gray"):
-        epd.display_1Gray(epd.getbuffer(image))
-        return
-
-    if hasattr(epd, "display_4Gray"):
-        image_4gray = image.convert("L")
-        epd.display_4Gray(epd.getbuffer_4Gray(image_4gray))
-        return
-
-    raise RuntimeError("No compatible display method found for epd3in7 driver.")
+    epd.display(
+        epd.getbuffer(image_black),
+        epd.getbuffer(image_red)
+    )
 
 
 def display_message(epd, font, message):
     """画面中央にメッセージを表示する"""
-    image = Image.new('1', (epd.width, epd.height), 255)
+    image = Image.new("1", (epd.width, epd.height), 255)
     draw = ImageDraw.Draw(image)
 
     tw, th = _text_size(draw, message, font)
@@ -115,22 +98,20 @@ def display_message(epd, font, message):
 
 def load_fonts():
     """フォントを読み込む。存在しない場合はデフォルトフォントを使う"""
-    font_path = os.path.join(picdir, 'Font.ttc')
+    font_path = os.path.join(picdir, "Font.ttc")
 
     if os.path.exists(font_path):
-        font_info = ImageFont.truetype(font_path, 18)
-        font_main = ImageFont.truetype(font_path, 24)
-        font_small = ImageFont.truetype(font_path, 16)
-        font_success = ImageFont.truetype(font_path, 36)
-        font_title = ImageFont.truetype(font_path, 28)
+        font_info = ImageFont.truetype(font_path, 12)
+        font_main = ImageFont.truetype(font_path, 16)
+        font_small = ImageFont.truetype(font_path, 11)
+        font_success = ImageFont.truetype(font_path, 22)
     else:
         font_info = ImageFont.load_default()
         font_main = ImageFont.load_default()
         font_small = ImageFont.load_default()
         font_success = ImageFont.load_default()
-        font_title = ImageFont.load_default()
 
-    return font_info, font_main, font_small, font_success, font_title
+    return font_info, font_main, font_small, font_success
 
 
 def write_csv(payload_obj, source_hash):
@@ -142,7 +123,7 @@ def write_csv(payload_obj, source_hash):
     file_exists = os.path.exists(csv_filename)
     field_names = list(csv_data.keys())
 
-    with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+    with open(csv_filename, "a", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=field_names)
 
         if not file_exists:
@@ -156,8 +137,8 @@ def make_qr_image(qr_payload):
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=6,
-        border=4
+        box_size=4,
+        border=3,
     )
 
     qr.add_data(qr_payload)
@@ -169,126 +150,106 @@ def make_qr_image(qr_payload):
     ).convert("1")
 
 
-def create_display_canvas(epd, qr_img, timestamp, qr_id, unique_id,
-                          font_info, font_main, font_small, font_title):
+def create_display_canvas(epd, qr_img, timestamp, qr_id,
+                          font_info, font_main, font_small):
     """
-    3.7inch e-Paper 用レイアウト。
+    2.15inch b 用レイアウト。
 
-    想定：
-      - 画面サイズは epd.width / epd.height から取得
-      - 左側：Node ID, Timestamp, QR ID
-      - 右側：大きめのQRコード
+    表示内容：
+      - Node ID
+      - Timestamp
+      - QR ID 下8桁
+      - QR code
+
+    画面サイズは epd.width / epd.height に従って自動調整する。
     """
-    canvas = Image.new('1', (epd.width, epd.height), 255)
+    canvas = Image.new("1", (epd.width, epd.height), 255)
     draw = ImageDraw.Draw(canvas)
 
-    margin = 16
-    gap = 12
-
+    margin = 4
     width = epd.width
     height = epd.height
 
-    # 画面が縦長の場合でも横長レイアウトにしたい場合は回転
-    # 3.7inchドライバによって width/height が 280x480 または 480x280 の場合があるため、
-    # ここでは現在の epd.width/epd.height に合わせて自動配置する。
     is_landscape = width >= height
 
     if is_landscape:
-        # 横長: 左に情報、右にQR
-        left_w = int(width * 0.45)
-        right_w = width - left_w - margin * 2
-
+        # 横長の場合：左に情報、右にQR
+        left_w = int(width * 0.46)
         x_text = margin
         y = margin
 
-        draw.text((x_text, y), "Yama Log QR", font=font_title, fill=0)
-        _, h = _text_size(draw, "Yama Log QR", font_title)
-        y += h + 18
-
         draw.text((x_text, y), "Node ID:", font=font_info, fill=0)
         _, h = _text_size(draw, "Node ID:", font_info)
-        y += h + 4
+        y += h + 1
 
         draw.text((x_text, y), node_id, font=font_main, fill=0)
         _, h = _text_size(draw, node_id, font_main)
-        y += h + 16
+        y += h + 4
 
         draw.text((x_text, y), "Timestamp:", font=font_info, fill=0)
         _, h = _text_size(draw, "Timestamp:", font_info)
-        y += h + 4
+        y += h + 1
 
         draw.text((x_text, y), timestamp, font=font_small, fill=0)
         _, h = _text_size(draw, timestamp, font_small)
-        y += h + 16
+        y += h + 3
 
         short_qr_id = qr_id[-8:]
-        draw.text((x_text, y), f"QR ID: {short_qr_id}", font=font_small, fill=0)
-        _, h = _text_size(draw, f"QR ID: {short_qr_id}", font_small)
-        y += h + 16
+        draw.text((x_text, y), f"QR:{short_qr_id}", font=font_small, fill=0)
 
-        short_hash = unique_id[:12]
-        draw.text((x_text, y), f"Hash: {short_hash}...", font=font_small, fill=0)
+        qr_area_w = width - left_w - margin * 2
+        qr_area_h = height - margin * 2
+        qr_size = min(qr_area_w, qr_area_h)
+        qr_size = max(60, int(qr_size))
 
-        # QRコード配置
-        max_qr_size = min(
-            right_w - gap,
-            height - margin * 2
-        )
+        qr_img_resized = qr_img.resize(
+            (qr_size, qr_size),
+            Image.NEAREST
+        ).convert("1")
 
-        qr_size = max(120, int(max_qr_size))
-        qr_img_resized = qr_img.resize((qr_size, qr_size), Image.NEAREST).convert("1")
-
-        qr_x = left_w + margin
+        qr_x = left_w + ((width - left_w) - qr_size) // 2
         qr_y = (height - qr_size) // 2
 
         canvas.paste(qr_img_resized, (qr_x, qr_y))
 
-        # 区切り線
-        line_x = left_w + margin // 2
+        line_x = left_w - 2
         draw.line((line_x, margin, line_x, height - margin), fill=0, width=1)
 
     else:
-        # 縦長: 上に情報、下にQR
+        # 縦長の場合：上に情報、下にQR
         x = margin
         y = margin
 
-        draw.text((x, y), "Yama Log QR", font=font_title, fill=0)
-        _, h = _text_size(draw, "Yama Log QR", font_title)
-        y += h + 14
-
         draw.text((x, y), "Node ID:", font=font_info, fill=0)
         _, h = _text_size(draw, "Node ID:", font_info)
-        y += h + 4
+        y += h + 1
 
         draw.text((x, y), node_id, font=font_main, fill=0)
         _, h = _text_size(draw, node_id, font_main)
-        y += h + 12
+        y += h + 4
 
         draw.text((x, y), "Timestamp:", font=font_info, fill=0)
         _, h = _text_size(draw, "Timestamp:", font_info)
-        y += h + 4
+        y += h + 1
 
         draw.text((x, y), timestamp, font=font_small, fill=0)
         _, h = _text_size(draw, timestamp, font_small)
-        y += h + 10
+        y += h + 3
 
         short_qr_id = qr_id[-8:]
-        draw.text((x, y), f"QR ID: {short_qr_id}", font=font_small, fill=0)
-        _, h = _text_size(draw, f"QR ID: {short_qr_id}", font_small)
-        y += h + 10
+        draw.text((x, y), f"QR:{short_qr_id}", font=font_small, fill=0)
+        _, h = _text_size(draw, f"QR:{short_qr_id}", font_small)
+        y += h + 3
 
-        short_hash = unique_id[:12]
-        draw.text((x, y), f"Hash: {short_hash}...", font=font_small, fill=0)
-        _, h = _text_size(draw, f"Hash: {short_hash}...", font_small)
-        y += h + 12
+        qr_area_w = width - margin * 2
+        qr_area_h = height - y - margin
+        qr_size = min(qr_area_w, qr_area_h)
+        qr_size = max(60, int(qr_size))
 
-        max_qr_size = min(
-            width - margin * 2,
-            height - y - margin
-        )
-
-        qr_size = max(120, int(max_qr_size))
-        qr_img_resized = qr_img.resize((qr_size, qr_size), Image.NEAREST).convert("1")
+        qr_img_resized = qr_img.resize(
+            (qr_size, qr_size),
+            Image.NEAREST
+        ).convert("1")
 
         qr_x = (width - qr_size) // 2
         qr_y = height - qr_size - margin
@@ -303,36 +264,29 @@ def create_display_canvas(epd, qr_img, timestamp, qr_id, unique_id,
 # ============================================================
 
 try:
-    epd = epd3in7.EPD()
+    epd = epd2in15b.EPD()
 
-    # ドライバによって init() の引数が異なる可能性があるため、安全に呼び出す
-    try:
-        epd.init()
-    except TypeError:
-        epd.init(0)
+    logging.info("epd2in15b QR Display")
+    logging.info(f"width={epd.width}, height={epd.height}")
 
-    logging.info(f"e-Paper size: width={epd.width}, height={epd.height}")
-
+    epd.init()
     _clear_epd(epd)
 
-    font_info, font_main, font_small, font_success, font_title = load_fonts()
+    font_info, font_main, font_small, font_success = load_fonts()
 
     while True:
-        # ------------------------------------------------------------
-        # 1. QRコード情報の生成
-        # ------------------------------------------------------------
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         qr_id = str(uuid.uuid4().hex)
 
         source_hash = {
-            'node_id': node_id,
-            'qr_id': qr_id,
-            'timestamp': timestamp
+            "node_id": node_id,
+            "qr_id": qr_id,
+            "timestamp": timestamp,
         }
 
         source_string = json.dumps(source_hash, sort_keys=True)
         unique_id = hashlib.sha256(
-            source_string.encode('utf-8')
+            source_string.encode("utf-8")
         ).hexdigest()
 
         payload_obj = {
@@ -340,52 +294,39 @@ try:
             "name": "yama log e-paper",
             "description": "yama log QRe-paper",
             "unique_id": unique_id,
-            "qr_id": qr_id
+            "qr_id": qr_id,
         }
 
         qr_payload = json.dumps(
             payload_obj,
             ensure_ascii=False,
-            separators=(',', ':')
+            separators=(",", ":"),
         )
 
         logging.info(f"Generated QR JSON preview: {qr_payload[:100]}...")
 
-        # ------------------------------------------------------------
-        # 2. QRコード画像生成
-        # ------------------------------------------------------------
         qr_img = make_qr_image(qr_payload)
 
-        # ------------------------------------------------------------
-        # 3. CSV保存
-        # ------------------------------------------------------------
         write_csv(payload_obj, source_hash)
 
-        # ------------------------------------------------------------
-        # 4. e-Paper 表示
-        # ------------------------------------------------------------
         canvas = create_display_canvas(
             epd=epd,
             qr_img=qr_img,
             timestamp=timestamp,
             qr_id=qr_id,
-            unique_id=unique_id,
             font_info=font_info,
             font_main=font_main,
             font_small=font_small,
-            font_title=font_title
         )
 
         _display_epd(epd, canvas)
 
-        # ------------------------------------------------------------
-        # 5. QRコードがスキャンされるのを待つ
-        # ------------------------------------------------------------
         flag_filename = f"scanned_{qr_id}.flag"
         timeout_seconds = 10
         is_scanned = False
 
         logging.info(f"Waiting for scan... Timeout: {timeout_seconds}s")
+        logging.info(f"Flag file: {flag_filename}")
 
         for _ in range(timeout_seconds):
             if os.path.exists(flag_filename):
@@ -401,9 +342,6 @@ try:
 
             time.sleep(1)
 
-        # ------------------------------------------------------------
-        # 6. 結果表示
-        # ------------------------------------------------------------
         if is_scanned:
             display_message(epd, font_success, "読み取り成功！")
             time.sleep(5)
@@ -434,7 +372,7 @@ except KeyboardInterrupt:
             pass
 
     try:
-        epd3in7.epdconfig.module_exit(cleanup=True)
+        epd2in15b.epdconfig.module_exit(cleanup=True)
     except Exception:
         pass
 

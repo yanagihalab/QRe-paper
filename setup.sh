@@ -17,7 +17,8 @@ fi
 
 echo "--- 仮想環境にPythonライブラリを requirements.txt からインストールします ---"
 # venv内のpipを直接使用し、sudoは付けない
-./venv/bin/pip install -r requirements.txt
+source venv/bin/activate
+pip install -r requirements.txt
 
 echo "--- Waveshare e-Paper ドライバを仮想環境にインストールします ---"
 if [ ! -d "e-Paper" ]; then

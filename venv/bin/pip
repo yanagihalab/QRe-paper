@@ -1,4 +1,4 @@
-#!/home/yama/tmp/QRe-paper/venv/bin/python
+#!/home/yamalog-8/Desktop/QRe-paper/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
