@@ -427,39 +427,59 @@ def render_qr_canvas(
     draw.rectangle((0, 0, width - 1, header_h), fill="yellow", outline="black")
     draw.text((margin, 7), "YamaLog QRe-paper", font=font_main, fill="black")
 
-    # --------------------------------------------------------
-    # 情報表示：上部に横並び気味に圧縮
-    # QRは画面下部中央に配置
-    # --------------------------------------------------------
+    # ========================================================
+    # 情報表示部
+    # すべて改行して縦に並べる
+    # ========================================================
+    x = margin
     y = header_h + 6
 
-    left_x = margin
-    right_x = width // 2 + 4
+    def draw_label_value(label: str, value: str, max_chars_per_line: int = 22, max_lines: int = 3) -> int:
+        nonlocal y
 
-    # 左側
-    y_left = y
-    y_left = draw_truncated(draw, (left_x, y_left), "node_id:", payload["node_id"], font_small, font_small, 24)
-    y_left = draw_truncated(draw, (left_x, y_left), "unique:", payload["unique_id"][:16] + "...", font_small, font_small, 24)
+        value = safe_text(str(value))
 
-    # 右側
-    y_right = y
-    y_right = draw_truncated(draw, (right_x, y_right), "qr_id:", payload["qr_id"][:16] + "...", font_small, font_small, 24)
-    y_right = draw_truncated(draw, (right_x, y_right), "tx:", (".." + txhash[-16:]) if txhash else "(none)", font_small, font_small, 24)
+        draw.text((x, y), safe_text(label), font=font_small, fill="red")
+        _, h = text_size(draw, label, font_small)
+        y += h + 1
 
-    # timestamp は中央寄せで1行
-    ts_text = safe_text(timestamp)
-    tw, th = text_size(draw, ts_text, font_small)
-    draw.text(((width - tw) // 2, max(y_left, y_right) + 2), ts_text, font=font_small, fill="black")
+        lines = []
+        for i in range(0, len(value), max_chars_per_line):
+            lines.append(value[i:i + max_chars_per_line])
+            if len(lines) >= max_lines:
+                break
 
-    # --------------------------------------------------------
+        if len(value) > max_chars_per_line * max_lines and lines:
+            lines[-1] = lines[-1][:-3] + "..."
+
+        if not lines:
+            lines = [""]
+
+        for line in lines:
+            draw.text((x + 4, y), line, font=font_small, fill="black")
+            _, h = text_size(draw, line, font_small)
+            y += h + 1
+
+        y += 3
+        return y
+
+    draw_label_value("node_id:", payload["node_id"], max_chars_per_line=22, max_lines=1)
+    draw_label_value("uuid:", payload["unique_id"], max_chars_per_line=22, max_lines=2)
+    draw_label_value("tx:", txhash if txhash else "(none)", max_chars_per_line=22, max_lines=2)
+    draw_label_value("qr_id:", payload["qr_id"], max_chars_per_line=22, max_lines=2)
+    draw_label_value("time:", timestamp, max_chars_per_line=22, max_lines=1)
+
+    # ========================================================
     # QRコード：画面下部中央
-    # --------------------------------------------------------
-    info_bottom = max(y_left, y_right) + th + 6
+    # ========================================================
+    info_bottom = y + 4
 
     qr_size = min(width - margin * 2, height - info_bottom - margin)
-    qr_size = max(120, int(qr_size))
+    qr_size = max(100, int(qr_size))
 
-    # 画面内に収める
+    # 少し小さくする
+    qr_size = min(qr_size, 160)
+
     qr_size = min(qr_size, width - margin * 2, height - header_h - margin * 2)
 
     qr_img_resized = qr_img.resize(
@@ -470,7 +490,6 @@ def render_qr_canvas(
     qr_x = (width - qr_size) // 2
     qr_y = height - qr_size - margin
 
-    # QR背景
     draw.rectangle(
         (qr_x - 4, qr_y - 4, qr_x + qr_size + 4, qr_y + qr_size + 4),
         fill="white",
@@ -544,7 +563,7 @@ def main() -> None:
             # --------------------------------------------------------
             # 2. TX送信
             # --------------------------------------------------------
-            display_message(epd, font_status, "Sending TX...")
+            # display_message(epd, font_status, "Sending TX...")  # disabled: no pre-TX screen
 
             res = call_node_send(
                 value=value_onchain,
@@ -561,8 +580,8 @@ def main() -> None:
             # 3. TX確定後にQR生成・表示
             # --------------------------------------------------------
             if ok and txhash:
-                display_message(epd, font_status, "TX OK")
-                time.sleep(1)
+                # display_message(epd, font_status, "TX OK")  # disabled: no TX OK screen
+                # time.sleep(1)
 
                 canvas = render_qr_canvas(
                     epd=epd,
